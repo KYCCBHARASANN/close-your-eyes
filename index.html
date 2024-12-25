@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Noise Art and Music</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            transition: background 2s ease;
+        }
+
+        #playButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        #playButton.hidden {
+            display: none;
+        }
+
+        .lyrics {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 24px;
+            color: white;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        .lyrics.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <button id="playButton">Play Music</button>
+    <div id="lyrics" class="lyrics"></div>
+    <audio id="audio" src="241222_close your eyes.mp3"></audio>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const audio = document.getElementById('audio');
+        const playButton = document.getElementById('playButton');
+        const lyricsDiv = document.getElementById('lyrics');
+
+        let startTime;
+        let dragging = false;
+        let dragStart = null;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+
+        const geometry = new THREE.SphereGeometry(5, 64, 64);
+        const material = new THREE.MeshStandardMaterial({ color: 0x1565c0, wireframe: true });
+        const sphere = new THREE.Mesh(geometry, material);
+        scene.add(sphere);
+
+        const originalPositions = Float32Array.from(geometry.attributes.position.array);
+        camera.position.z = 10;
+
+        function displayLyrics(currentTime) {
+            let lyrics = '';
+
+            if (currentTime >= 54.4 && currentTime <= 83) {
+                lyrics = `just close your eyes<br>just close your seeing<br>just close your eyes<br>just close you never`;
+            } else if (currentTime >= 94 && currentTime <= 127) {
+                lyrics = `扇風機持って舞っている<br>いつもこんな調子だったんだ<br>扇風機持って立っている<br>いつもこんな調子で`;
+            } else if (currentTime >= 127 && currentTime <= 155) {
+                lyrics = `just close your eyes<br>just close your seeing<br>just close your eyes<br>just close you never`;
+            } else if (currentTime >= 203 && currentTime <= 231) {
+                lyrics = `気になっていたこと　過ぎ去っていくもの<br>気になっていたこと　雨が降るよ<br>気になっていたこと　日々待っていたけど<br>気になっていたこと　ねぇ、分かるでしょう`;
+            } else if (currentTime >= 241 && currentTime <= 319) {
+                lyrics = `just close your eyes<br>just close your seeing<br>just close your eyes<br>just close you never`;
+            }
+
+            if (lyrics) {
+                lyricsDiv.innerHTML = lyrics;
+                lyricsDiv.classList.add('visible');
+            } else {
+                lyricsDiv.classList.remove('visible');
+            }
+        }
+
+        playButton.addEventListener('click', () => {
+            playButton.classList.add('hidden');
+            audio.play();
+
+            function updateBackground(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const elapsed = (timestamp - startTime) / 1000;
+
+                if (elapsed >= 29.928) {
+                    document.body.style.background = 'white';
+                } else {
+                    document.body.style.background = 'black';
+                }
+
+                if (elapsed >= 366) {
+                    sphere.visible = false;
+                }
+            }
+
+            function animate(timestamp) {
+                updateBackground(timestamp);
+                displayLyrics(audio.currentTime);
+
+                const positions = geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    const offset = Math.sin(Date.now() * 0.001 + originalPositions[i]) * 0.3;
+                    positions[i] = originalPositions[i] + offset;
+                    positions[i + 1] = originalPositions[i + 1] + offset;
+                    positions[i + 2] = originalPositions[i + 2] + offset;
+                }
+                geometry.attributes.position.needsUpdate = true;
+
+                renderer.render(scene, camera);
+                requestAnimationFrame(animate);
+            }
+
+            requestAnimationFrame(animate);
+        });
+
+        renderer.domElement.addEventListener('mousedown', (event) => {
+            dragging = true;
+            dragStart = { x: event.clientX, y: event.clientY };
+        });
+
+        renderer.domElement.addEventListener('mouseup', () => {
+            dragging = false;
+        });
+
+        renderer.domElement.addEventListener('mousemove', (event) => {
+            if (dragging && dragStart) {
+                const deltaX = (event.clientX - dragStart.x) * 0.01;
+                const deltaY = (event.clientY - dragStart.y) * 0.01;
+
+                sphere.rotation.y += deltaX;
+                sphere.rotation.x += deltaY;
+
+                dragStart = { x: event.clientX, y: event.clientY };
+            }
+        });
+
+        renderer.domElement.addEventListener('click', (event) => {
+            const mouse = new THREE.Vector2(
+                (event.clientX / window.innerWidth) * 2 - 1,
+                -(event.clientY / window.innerHeight) * 2 + 1
+            );
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObject(sphere);
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                const positions = geometry.attributes.position.array;
+
+                for (let i = 0; i < positions.length; i += 3) {
+                    const dx = positions[i] - point.x;
+                    const dy = positions[i + 1] - point.y;
+                    const dz = positions[i + 2] - point.z;
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                    if (distance < 1) {
+                        positions[i] += Math.random() * 0.5;
+                        positions[i + 1] += Math.random() * 0.5;
+                        positions[i + 2] += Math.random() * 0.5;
+                    }
+                }
+
+                geometry.attributes.position.needsUpdate = true;
+
+                // Change the sphere's color randomly
+                material.color.setHex(Math.random() * 0xffffff);
+            }
+        });
+
+        renderer.domElement.addEventListener('wheel', (event) => {
+            const delta = Math.sign(event.deltaY);
+            camera.position.z += delta * 0.5;
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
