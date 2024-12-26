@@ -39,8 +39,10 @@
             text-align: center;
             font-size: 24px;
             color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
             opacity: 0;
-            transition: opacity 2s ease;
+            transition: opacity 1s ease; /* 変更 */
+            z-index: 5; /* 他の要素に隠れないように */
         }
 
         .lyrics.visible {
@@ -66,6 +68,10 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.domElement.style.position = 'absolute';
+        renderer.domElement.style.top = '50%';
+        renderer.domElement.style.left = '50%';
+        renderer.domElement.style.transform = 'translate(-50%, -50%)';
         document.body.appendChild(renderer.domElement);
 
         const light = new THREE.PointLight(0xffffff, 1, 100);
@@ -79,6 +85,8 @@
 
         const originalPositions = Float32Array.from(geometry.attributes.position.array);
         camera.position.z = 10;
+
+        let currentRGB = { r: 255, g: 255, b: 255 };
 
         function displayLyrics(currentTime) {
             let lyrics = '';
@@ -103,27 +111,43 @@
             }
         }
 
+        function updateCanvasColor() {
+            const rgbChange = () => (Math.random() > 0.5 ? 1 : -1);
+
+            currentRGB.r += rgbChange();
+            currentRGB.g += rgbChange();
+            currentRGB.b += rgbChange();
+
+            currentRGB.r = Math.max(0, Math.min(255, currentRGB.r));
+            currentRGB.g = Math.max(0, Math.min(255, currentRGB.g));
+            currentRGB.b = Math.max(0, Math.min(255, currentRGB.b));
+
+            const colorString = `rgb(${currentRGB.r}, ${currentRGB.g}, ${currentRGB.b})`;
+            renderer.setClearColor(colorString);
+        }
+
         playButton.addEventListener('click', () => {
             playButton.classList.add('hidden');
             audio.play();
 
-            function updateBackground(timestamp) {
+            function animate(timestamp) {
                 if (!startTime) startTime = timestamp;
                 const elapsed = (timestamp - startTime) / 1000;
 
-                if (elapsed >= 29.928) {
-                    document.body.style.background = 'white';
-                } else {
-                    document.body.style.background = 'black';
-                }
-
-                if (elapsed >= 366) {
+                if (elapsed >= 29.928 && elapsed < 366) {
+                    if (elapsed === 29.928) {
+                        renderer.setClearColor('rgb(255, 255, 255)');
+                        document.body.style.background = 'white';
+                        renderer.domElement.style.opacity = 0.5;
+                    } else {
+                        updateCanvasColor();
+                    }
+                } else if (elapsed >= 366) {
                     sphere.visible = false;
+                    document.body.style.background = 'black';
+                    renderer.setClearColor(0x000000);
                 }
-            }
 
-            function animate(timestamp) {
-                updateBackground(timestamp);
                 displayLyrics(audio.currentTime);
 
                 const positions = geometry.attributes.position.array;
@@ -163,49 +187,27 @@
             }
         });
 
-        renderer.domElement.addEventListener('click', (event) => {
-            const mouse = new THREE.Vector2(
-                (event.clientX / window.innerWidth) * 2 - 1,
-                -(event.clientY / window.innerHeight) * 2 + 1
-            );
+        renderer.domElement.addEventListener('click', () => {
+            sphere.material.color.setHex(Math.random() * 0xffffff);
+        });
 
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-
-            const intersects = raycaster.intersectObject(sphere);
-            if (intersects.length > 0) {
-                const point = intersects[0].point;
-                const positions = geometry.attributes.position.array;
-
-                for (let i = 0; i < positions.length; i += 3) {
-                    const dx = positions[i] - point.x;
-                    const dy = positions[i + 1] - point.y;
-                    const dz = positions[i + 2] - point.z;
-                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-                    if (distance < 1) {
-                        positions[i] += Math.random() * 0.5;
-                        positions[i + 1] += Math.random() * 0.5;
-                        positions[i + 2] += Math.random() * 0.5;
-                    }
-                }
-
-                geometry.attributes.position.needsUpdate = true;
-
-                // Change the sphere's color randomly
-                material.color.setHex(Math.random() * 0xffffff);
+        renderer.domElement.addEventListener('touchstart', (event) => {
+            if (event.touches.length === 1) {
+                dragging = true;
+                dragStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
             }
         });
 
-        renderer.domElement.addEventListener('wheel', (event) => {
-            const delta = Math.sign(event.deltaY);
-            camera.position.z += delta * 0.5;
-        });
+        renderer.domElement.addEventListener('touchmove', (event) => {
+            if (dragging && dragStart && event.touches.length === 1) {
+                const deltaX = (event.touches[0].clientX - dragStart.x) * 0.01;
+                const deltaY = (event.touches[0].clientY - dragStart.y) * 0.01;
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+                sphere.rotation.y += deltaX;
+                sphere.rotation.x += deltaY;
+
+                dragStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+            }
         });
     </script>
 </body>
